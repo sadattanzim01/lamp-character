@@ -7,7 +7,6 @@ live scene ("shine your light on the book"), re-checking with the camera before 
 
 - **Technical note (2 pages):** [docs/TECHNICAL_NOTE.md](docs/TECHNICAL_NOTE.md) · [PDF](docs/TECHNICAL_NOTE.pdf)
 - **Protocol:** [docs/PROTOCOL.md](docs/PROTOCOL.md) · **Measurements:** [docs/MEASUREMENTS.md](docs/MEASUREMENTS.md)
-- **Demo script:** [docs/DEMO.md](docs/DEMO.md)
 
 ![architecture](docs/architecture.png)
 
@@ -61,7 +60,7 @@ brain/      brain process
   goals.py      plan → act → re-observe → correct
   audio.py      mixer + synthesised SFX and music (no audio assets)
 deploy/     systemd user units
-docs/       technical note, protocol, measurements, demo script, diagram source
+docs/       technical note, protocol, measurements, diagram source
 scripts/    install, self-test, measurement tools, early step demos
 logs/       runtime logs (git-ignored): engagement, latency, goals, memory
 ```

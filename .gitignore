@@ -7,3 +7,4 @@ generated/
 .DS_Store
 logs/
 models/
+docs/DEMO.md
