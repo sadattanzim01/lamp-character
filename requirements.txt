@@ -1,0 +1,11 @@
+mujoco>=3.3
+numpy>=1.26
+pillow>=10.0
+websockets>=13
+# 4.x: OpenCV 5 no longer bundles the Haar face/eye cascades used for attention
+opencv-python>=4.9,<5
+sounddevice>=0.4.6
+anthropic>=0.40
+faster-whisper>=1.1
+piper-tts>=1.2
+psutil>=5.9

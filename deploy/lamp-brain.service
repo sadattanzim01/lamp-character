@@ -1,0 +1,17 @@
+# systemd *user* unit (installed by scripts/install_ubuntu.sh --services)
+[Unit]
+Description=Character lamp brain (perception, speech, mind)
+Requires=lamp-body.service
+After=lamp-body.service pipewire.service
+
+[Service]
+WorkingDirectory=@ROOT@
+ExecStart=@ROOT@/.venv/bin/python -m brain.main
+Restart=on-failure
+RestartSec=3
+# Leave headroom on a 4-core / 8 GB laptop.
+MemoryHigh=2G
+MemoryMax=3G
+
+[Install]
+WantedBy=default.target

@@ -1,0 +1,17 @@
+# systemd *user* unit (installed by scripts/install_ubuntu.sh --services)
+[Unit]
+Description=Character lamp body (MuJoCo simulator + protocol server)
+After=graphical-session.target
+
+[Service]
+WorkingDirectory=@ROOT@
+Environment=MUJOCO_GL=egl
+ExecStart=@ROOT@/.venv/bin/python -m body.server --headless
+Restart=on-failure
+RestartSec=2
+# The body is the real-time part: give it priority over the brain.
+Nice=-5
+CPUWeight=200
+
+[Install]
+WantedBy=default.target
