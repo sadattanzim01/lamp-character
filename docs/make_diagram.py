@@ -1,17 +1,33 @@
-"""Generate docs/architecture.svg (+ .png): architecture and data-flow diagram.
+"""Draws the architecture diagram used in the README and the technical note.
 
-    python docs/make_diagram.py
-Hand-placed layout so the note's one diagram reads left-to-right:
-sensors -> brain -> body, with the cloud boundary on top.
+    python docs/make_diagram.py      # writes docs/architecture.svg
+
+What this file does, in plain words:
+    It builds the diagram as an SVG (a picture described in text: rectangles,
+    lines and labels at exact positions) by hand-placing every box and arrow.
+    It reads left to right: sensors (camera, mic, speaker) -> the brain
+    program -> the body program, with the cloud (Claude) along the top.
+
+Why draw it by hand instead of using an auto-layout tool:
+    The first version used Mermaid (an automatic diagram tool), but its layout
+    was tangled: arrows crossed boxes and the body sat far off to the side.
+    Placing things by hand keeps the one diagram the note allows clean.
+
+To change the diagram: edit the box(...) and arrow(...) lines below, run this
+file, then turn the SVG into the PNG (the PNG in docs/ was made with a headless
+browser screenshot at 2x resolution).
 """
 from __future__ import annotations
 
 from pathlib import Path
 
-W, H = 1600, 930
-OUT = Path(__file__).resolve().parent
+W, H = 1600, 930                       # canvas size in pixels
+OUT = Path(__file__).resolve().parent  # save next to this file (docs/)
 
-C = {  # fill, stroke, text
+# Colour scheme for each kind of box: (fill colour, border colour, text colour).
+# hw = hardware, local = runs on the laptop, cloud = Anthropic API,
+# body = the body program, store = memory.
+C = {
     "hw": ("#eef1f8", "#4a5d8a", "#1d2747"),
     "local": ("#eef6ee", "#3a7d44", "#16331b"),
     "cloud": ("#fdf0e6", "#c46a1b", "#5a2e08"),
@@ -19,18 +35,21 @@ C = {  # fill, stroke, text
     "store": ("#fffbe8", "#a68a1f", "#4a3d08"),
 }
 FONT = "Helvetica, Arial, sans-serif"
-parts: list[str] = []
+parts: list[str] = []                  # the SVG pieces, collected in drawing order
+# Every box's position (x, y, width, height), so arrows can attach to its sides.
 boxes: dict[str, tuple[float, float, float, float]] = {}
 
 
 def box(key, x, y, w, h, title, sub="", kind="local", bold=True):
+    """Draw a rounded box with a bold title and smaller lines underneath.
+    In `sub`, "|" starts a new line. `key` is the name arrows use to find it."""
     fill, stroke, text = C[kind]
     boxes[key] = (x, y, w, h)
     parts.append(f'<rect x="{x}" y="{y}" width="{w}" height="{h}" rx="8" fill="{fill}" '
                  f'stroke="{stroke}" stroke-width="1.6"/>')
     lines = sub.split("|") if sub else []
     total = 1 + len(lines)
-    y0 = y + h / 2 - (total - 1) * 8.5 + 5
+    y0 = y + h / 2 - (total - 1) * 8.5 + 5   # start high enough that all lines sit centred
     parts.append(f'<text x="{x + w / 2}" y="{y0}" text-anchor="middle" font-family="{FONT}" '
                  f'font-size="15" font-weight="{700 if bold else 400}" fill="{text}">{title}</text>')
     for i, ln in enumerate(lines):
@@ -39,6 +58,7 @@ def box(key, x, y, w, h, title, sub="", kind="local", bold=True):
 
 
 def group(x, y, w, h, title, kind):
+    """Draw a dashed outline around a group of boxes (a whole program), titled at the bottom."""
     fill, stroke, text = C[kind]
     parts.append(f'<rect x="{x}" y="{y}" width="{w}" height="{h}" rx="14" fill="none" '
                  f'stroke="{stroke}" stroke-width="2" stroke-dasharray="7 5"/>')
@@ -47,12 +67,21 @@ def group(x, y, w, h, title, kind):
 
 
 def side(key, s):
+    """The middle of one side of a box: "l"eft, "r"ight, "t"op or "b"ottom (where arrows attach)."""
     x, y, w, h = boxes[key]
     return {"l": (x, y + h / 2), "r": (x + w, y + h / 2),
             "t": (x + w / 2, y), "b": (x + w / 2, y + h)}[s]
 
 
 def arrow(a, b, label="", color="#555", width=1.6, both=False, via=None, lx=0, ly=-6, dash=""):
+    """Draw an arrow from point a to point b.
+
+    via     corner points to pass through, so lines can go around boxes
+    both    arrowheads at both ends (a two-way exchange)
+    dash    dashed line (used for anything going to the cloud)
+    label   text placed near the middle of the line, nudged by lx/ly;
+            the white outline behind it keeps it readable over other lines
+    """
     pts = [a] + (via or []) + [b]
     d = "M " + " L ".join(f"{p[0]:.1f} {p[1]:.1f}" for p in pts)
     marker = 'marker-end="url(#ah)"' + (' marker-start="url(#ah)"' if both else "")
@@ -68,6 +97,7 @@ def arrow(a, b, label="", color="#555", width=1.6, both=False, via=None, lx=0, l
 
 
 # ------------------------------------------------------------------ layout
+# The two programs (dashed outlines), the cloud on top, then the hardware and every box.
 group(150, 120, 1030, 790, "Brain process · brain.main · 15 Hz main loop", "local")
 group(1215, 120, 370, 790, "Body process · body.server · 100 Hz", "body")
 
@@ -102,6 +132,7 @@ box("lb", 1240, 545, 320, 96, "LampBody (safety)", "URDF soft limits · self-col
 box("sim", 1240, 700, 320, 80, "MuJoCo", "supplied URDF untouched · spotlight|+ emissive shade = light", "body")
 
 # ------------------------------------------------------------------ edges
+# Arrows inside the brain: camera -> attention -> engagement -> character, etc.
 arrow(side("cam", "r"), side("att", "l"), via=[(150, 225), (160, 202)])
 arrow(side("cam", "r"), side("scn", "l"), via=[(150, 225), (160, 322)])
 arrow(side("att", "r"), side("eng", "l"))
@@ -119,12 +150,13 @@ arrow((640, 540), (730, 540), "")
 arrow(side("chr", "b"), side("mix", "t"))
 arrow(side("mix", "l"), side("spk", "r"), via=[(150, 796), (140, 815)])
 arrow(side("chr", "r"), side("bc", "l"))
-# cloud
+# Dashed orange lines: what goes to the cloud (and comes back).
 cl = "#c46a1b"
 arrow((340, 290), (470, 62), "JPEG on change", color=cl, via=[(340, 262), (400, 262), (400, 62)], dash="5 4", lx=-8, ly=-6)
 arrow((600, 480), (655, 80), "transcript + notes", color=cl, both=True, via=[(600, 460), (655, 460)], dash="5 4", lx=-20, ly=-196)
 arrow(side("goal", "t"), (830, 80), "frame + goal,|locate", color=cl, both=True, dash="5 4", lx=52, ly=-40)
-# protocol
+# The thick two-way purple arrow: the WebSocket connection between brain and body,
+# plus a small legend box listing the messages that travel over it.
 arrow(side("bc", "r"), (1240, 202), "", color="#6b4ea1", width=2.6, both=True,
       via=[(1200, 577), (1200, 202)])
 parts.append(f'<g font-family="{FONT}" font-size="12.5" fill="#2c1e47">'
@@ -136,10 +168,11 @@ parts.append(f'<g font-family="{FONT}" font-size="12.5" fill="#2c1e47">'
              f'<text x="1000" y="721">← done (completed /</text>'
              f'<text x="1000" y="738">   preempted)</text>'
              f'<text x="1000" y="755">← state 20 Hz</text></g>')
+# Inside the body: server -> executor -> gaze IK -> LampBody -> MuJoCo, top to bottom.
 for a, b in (("srv", "exe"), ("exe", "ik"), ("ik", "lb"), ("lb", "sim")):
     arrow(side(a, "b"), side(b, "t"))
 
-# legend
+# The colour key in the bottom-right corner.
 lx, ly = 1240, 800
 for i, (k, t) in enumerate((("local", "runs on the laptop"), ("cloud", "cloud (only text + occasional JPEG)"),
                             ("body", "body: owns safety"), ("store", "memory (text only)"))):
@@ -148,6 +181,8 @@ for i, (k, t) in enumerate((("local", "runs on the laptop"), ("cloud", "cloud (o
                  f'<text x="{lx + 24}" y="{ly + 12 + 22 * i}" font-family="{FONT}" font-size="12.5" '
                  f'fill="#333">{t}</text>')
 
+# Wrap all the pieces into one SVG file. The <marker> defines the arrowhead shape
+# that every arrow uses (it takes the colour of its line).
 svg = (f'<svg xmlns="http://www.w3.org/2000/svg" width="{W}" height="{H}" viewBox="0 0 {W} {H}">'
        '<defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" '
        'orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="context-stroke"/></marker></defs>'
