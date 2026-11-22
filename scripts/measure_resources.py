@@ -1,12 +1,21 @@
-"""Measure CPU and memory of the running body and brain processes.
+"""Measures how much CPU and memory Lumi uses while it's running.
 
-Start the lamp normally (body + brain), then in a third terminal:
+How to run it: start the lamp (./run.sh), then in a second terminal:
     python scripts/measure_resources.py --seconds 120
+While it measures, actually USE the lamp (look at it, talk, show an object,
+give a goal), so the numbers reflect real work and not just idling.
 
-Interact with the lamp while it samples (engage, talk, show an object, give a
-goal) so the numbers cover real work, not just idle. Writes
-logs/resources.json. CPU % is per core (100% = one full core); the summary
-also shows the share of a 4-core machine (the Ubuntu target).
+What this file does, in plain words:
+    It finds the two running programs (the body and the brain), checks their
+    CPU use, memory and thread count twice a second for the whole period,
+    then prints a summary table and saves it to logs/resources.json.
+
+How to read the numbers:
+    * CPU % is per core: 100% = one core fully busy, so on a 10-core Mac the
+      maximum is 1000%. The summary also converts it to a share of a 4-core
+      machine, because that's the Ubuntu laptop the challenge targets.
+    * RSS = how much RAM the program is actually using right now.
+    * p95 = 95% of the samples were at or below this value (ignores rare spikes).
 """
 from __future__ import annotations
 
@@ -20,12 +29,16 @@ from pathlib import Path
 import psutil
 
 ROOT = Path(__file__).resolve().parent.parent
+# How to recognise each program: by the module name in its command line.
 ROLES = {"body": "body.server", "brain": "brain.main"}
 
 
 def find() -> dict[str, psutil.Process]:
-    """Largest process per role (skips wrappers like `timeout` or shells that
-    merely mention the module name in their command line)."""
+    """Find the body and brain programs among everything running on the computer.
+
+    If several processes mention the name (e.g. a shell or `timeout` wrapper
+    that launched it), pick the one using the most memory: that's the real program.
+    """
     found: dict[str, psutil.Process] = {}
     for p in psutil.process_iter(["pid", "cmdline", "memory_info"]):
         cmd = " ".join(p.info.get("cmdline") or [])
@@ -47,11 +60,14 @@ def main() -> None:
     missing = [r for r in ROLES if r not in procs]
     if missing:
         raise SystemExit(f"Not running: {', '.join(missing)}. Start the lamp first.")
+    # The first CPU reading is always 0 (it measures "since last time"), so take
+    # a throwaway reading first.
     for p in procs.values():
-        p.cpu_percent(None)                      # prime the counters
+        p.cpu_percent(None)
     samples = {r: {"cpu": [], "rss_mb": [], "threads": []} for r in procs}
     print(f"sampling {', '.join(f'{r}={p.pid}' for r, p in procs.items())} for {args.seconds:.0f}s "
           "- interact with the lamp now...")
+    # ---- Sample every 0.5 s until time is up.
     t_end = time.time() + args.seconds
     while time.time() < t_end:
         time.sleep(args.interval)
@@ -62,8 +78,9 @@ def main() -> None:
                     samples[role]["rss_mb"].append(p.memory_info().rss / 2**20)
                     samples[role]["threads"].append(p.num_threads())
             except psutil.NoSuchProcess:
-                pass
+                pass                             # that program quit mid-measurement
 
+    # ---- Summarise: average, p95 and maximum CPU; average and peak memory.
     summary = {"machine": {"system": platform.system(), "machine": platform.machine(),
                            "cpus": psutil.cpu_count(), "ram_gb": round(psutil.virtual_memory().total / 2**30, 1)},
                "seconds": args.seconds, "processes": {}}
@@ -81,6 +98,7 @@ def main() -> None:
         summary["processes"][role] = row
         print(f"{role:8s} {row['cpu_mean_pct']:8.1f}% {row['cpu_p95_pct']:7.1f}% {row['cpu_max_pct']:7.1f}% "
               f"{row['rss_mean_mb']:7.0f}MB {row['rss_max_mb']:6.0f}MB")
+    # Totals for body + brain together.
     total_mean = sum(r["cpu_mean_pct"] for r in summary["processes"].values())
     total_rss = sum(r["rss_max_mb"] for r in summary["processes"].values())
     summary["total"] = {"cpu_mean_pct": round(total_mean, 1),
